@@ -61,9 +61,11 @@
 Рекомендуется использовать виртуальное окружение.
 
 ```bash
-# Создаем папку проекта и переходим в нее, например
-mkdir -p ~/Scripts/audio-journal
-cd ~/Scripts/audio-journal
+# Клонируйте репозиторий и перейдите в него:
+git clone https://github.com/serg-the-engineer/obsidian-bros.git ~/Scripts
+cd ~/Scripts/obsidian-bros
+# можно обойтись ручным копирование .py и requirements файлов.
+
 
 # Устанавливаем пакетный менеджер питона
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -114,8 +116,7 @@ ln -s ~/Ваша/Папка/Для/Аудио ~/Obsidian/ВашVault/AudioLinks
 3.  Запустите скрипт:
     ```bash
     # Из папки проекта
-    source venv/bin/activate
-    uv run transcriber.py
+    uv run --env-file .env transcriber.py
     ```
 4.  Скрипт:
     *   Найден новые `.m4a` файлы.
@@ -157,13 +158,13 @@ ln -s ~/Ваша/Папка/Для/Аудио ~/Obsidian/ВашVault/AudioLinks
 
 ```bash
 # Показать доступные анализы
-uv run wisdom_bro.py
+uv run --env-file .env wisdom_bro.py
 
 # Запустить конкретный анализ
-uv run wisdom_bro.py weekly_retro
+uv run --env-file .env wisdom_bro.py weekly_retro
 
 # Запустить все анализы
-uv run wisdom_bro.py all
+uv run --env-file .env wisdom_bro.py all
 ```
 
 ### 📊 Доступные сценарии

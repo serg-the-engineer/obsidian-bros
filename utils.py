@@ -15,17 +15,6 @@ def log(msg: str) -> None:
 
 
 def send_notification(title: str, message: str) -> None:
-    """Show macOS notification via AppleScript."""
-    try:
-        script = (
-            f'display notification "{message}" with title "{title}" sound name "Glass"'
-        )
-        subprocess.run(["osascript", "-e", script])
-    except Exception:
-        # best-effort, don't crash if notifications fail
-        pass
-
-    # Дополнительно: если заданы переменные окружения для Telegram — отправляем туда
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     if bot_token and chat_id:

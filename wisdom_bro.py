@@ -311,7 +311,7 @@ def run_analysis(key):
 
         send_notification(
             "Мудрый Бро",
-            f"'{cfg['name']}' {date_str} готов!",
+            f"{cfg['name']} {date_str} готов!",
         )
 
     except Exception as e:
