@@ -1,12 +1,11 @@
 import argparse
 import datetime
 import os
-import subprocess
 
 from openai import OpenAI
 
 from config import ANALYSIS_DIR, JOURNAL_DIR, OLLAMA_API_URL, OLLAMA_MODEL
-from utils import ensure_ollama, log
+from utils import ensure_ollama, log, send_notification
 
 SYSTEM_PROMPT = """
 Ты — мой персональный аналитик жизни и коуч по методологии Kaizen (непрерывные улучшения).
@@ -57,7 +56,7 @@ ANALYSIS_TYPES = {
         "system": SYSTEM_PROMPT,
         "prompt_template": """
 Ты — аналитик данных, специализирующийся на пиковой продуктивности (Peak Performance).
-Проанализируй записи за 30 дней. Найди дни с высокой Оценкой Дня (8-10) или значимыми Успехами.
+Проанализируй записи за 30 дней. Найди дни с высокой Оценкой Дня (4-5) или значимыми Успехами.
 
 Проведи "обратный инжиниринг" этих дней:
 1. Как я спал накануне?
@@ -95,8 +94,13 @@ ANALYSIS_TYPES = {
 }
 
 
-def get_journal_entries(days_back):
-    """Собирает текст заметок за последние N дней."""
+def get_journal_entries(days_back, extract_transcript_only=False):
+    """Собирает текст заметок за последние N дней.
+
+    Args:
+        days_back: Количество дней для анализа
+        extract_transcript_only: Если True, извлекает только текст после '## Полный транскрипт'
+    """
     entries_text = []
     today = datetime.date.today()
 
@@ -112,8 +116,39 @@ def get_journal_entries(days_back):
         if os.path.exists(filepath):
             with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
+
+                # Если нужен только транскрипт, извлекаем текст после '## Полный транскрипт'
+                if extract_transcript_only:
+                    if "## Полный транскрипт" in content:
+                        transcript_part = content.split("## Полный транскрипт", 1)[1]
+                        content = transcript_part.strip()
+                    else:
+                        # Если раздела нет, пропускаем запись
+                        continue
+
+                # Фильтруем строки
+                filtered_lines = []
+                for line in content.split("\n"):
+                    # Пропускаем строки, начинающиеся с --- или |
+                    if (
+                        line.startswith("---")
+                        or line.startswith("|")
+                        or line.startswith("date")
+                        or line.startswith("type")
+                    ):
+                        continue
+                    # Пропускаем строки с [[Дневник]] и ссылками на аудиофайлы ![[AudioLinks/...]]
+                    if "[[Дневник]]" in line or line.strip().startswith("![["):
+                        continue
+                    filtered_lines.append(line)
+
+                # Сжимаем множественные пустые строки в одну
+                cleaned_content = "\n".join(filtered_lines)
+                while "\n\n\n" in cleaned_content:
+                    cleaned_content = cleaned_content.replace("\n\n\n", "\n\n")
+
                 entries_text.append(
-                    f"--- ЗАПИСЬ ОТ {date_target.strftime('%Y-%m-%d')} ---\n{content}\n"
+                    f"--- ЗАПИСЬ ОТ {date_target.strftime('%Y-%m-%d')} ---\n{cleaned_content}\n"
                 )
         else:
             # Можно логировать пропуски, если нужно
@@ -132,7 +167,7 @@ def save_markdown(folder, filename, content):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Персональный Коуч — анализатор дневниковых записей"
+        description="Мудрый Бро — анализатор дневниковых записей"
     )
 
     available_keys = ", ".join(sorted(ANALYSIS_TYPES.keys()))
@@ -145,11 +180,6 @@ def main():
             " Без аргументов показывает список."
         ),
     )
-    parser.add_argument(
-        "--no-open",
-        action="store_true",
-        help="Не открывать результат в системной программе",
-    )
 
     args = parser.parse_args()
 
@@ -159,7 +189,7 @@ def main():
 
     # Если аргумент не передан, показываем помощь
     if args.analysis is None:
-        print("\n👋 Персональный Коуч — анализатор дневниковых записей")
+        print("\n👋 Мудрый Бро — анализатор дневниковых записей")
         print(f"Папка дневника: {JOURNAL_DIR}\n")
         print("Доступные сценарии анализа:\n")
 
@@ -171,33 +201,37 @@ def main():
 
         print("\nПримеры использования:")
         print(
-            "  python personal_couch.py weekly_retro          # Запустить недельный ретро-анализ"
+            "  uv run wisdom_bro.py weekly_retro          # Запустить недельный ретро-анализ"
         )
-        print("  python personal_couch.py all                  # Запустить все анализы")
+        print("  uv run wisdom_bro.py all                  # Запустить все анализы")
         print(
-            "  python personal_couch.py health_check --no-open # Без автооткрытия результата"
+            "  uv run wisdom_bro.py health_check          # Запустить детектор выгорания"
         )
         return
 
     # Запуск запрошенного анализа
     if args.analysis == "all":
         for key in ANALYSIS_TYPES:
-            run_analysis(key, open_result=not args.no_open)
+            run_analysis(key)
     elif args.analysis in ANALYSIS_TYPES:
-        run_analysis(args.analysis, open_result=not args.no_open)
+        run_analysis(args.analysis)
     else:
         print(f"Ошибка: неизвестный ключ анализа '{args.analysis}'")
         print(f"Доступные ключи: {available_keys}")
-        print("Используйте 'python personal_couch.py' без аргументов для справки")
+        print("Используйте 'uv run wisdom_bro.py' без аргументов для справки")
 
 
-def run_analysis(key, open_result=True):
-    """Запуск анализа с опциональным открытием результата."""
+def run_analysis(key):
+    """Запуск анализа: сохраняет результат на диск (без автоматического открытия)."""
     cfg = ANALYSIS_TYPES[key]
     log(f"--- Запуск: {cfg['name']} ---")
 
     # 1. Сбор данных
-    context_data = get_journal_entries(cfg["days"])
+    # Для "ЛингвоАнализ" и "Лаборатория" используем только транскрипт
+    extract_transcript = key in ["linguistic_analysis", "laboratory"]
+    context_data = get_journal_entries(
+        cfg["days"], extract_transcript_only=extract_transcript
+    )
     if not context_data:
         log("❌ Нет данных за указанный период.")
         return
@@ -244,10 +278,10 @@ task: {cfg['name']}
 """
         save_path = save_markdown(ANALYSIS_DIR, result_filename, md_output)
         log(f"✅ Готово! Результат: {save_path}")
-
-        # Открываем файл (опционально, для macOS)
-        if open_result:
-            subprocess.run(["open", save_path])
+        send_notification(
+            "Мудрый Бро",
+            f"'{cfg['name']}' {date_str} готов!",
+        )
 
     except Exception as e:
         log(f"❌ Ошибка при работе с AI: {e}")

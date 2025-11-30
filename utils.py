@@ -1,8 +1,11 @@
 import datetime
+import os
 import socket
 import subprocess
 import time
 from typing import Optional
+
+import requests
 
 from config import OLLAMA_MODEL
 
@@ -21,6 +24,21 @@ def send_notification(title: str, message: str) -> None:
     except Exception:
         # best-effort, don't crash if notifications fail
         pass
+
+    # Дополнительно: если заданы переменные окружения для Telegram — отправляем туда
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+    if bot_token and chat_id:
+        try:
+            text = f"{title}: {message}"
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            resp = requests.post(url, json={"chat_id": chat_id, "text": text})
+            # Не поднимаем исключение наружу — best-effort
+            if resp.status_code != 200:
+                # Можно логировать, но здесь используем простую печать
+                print(f"[Telegram notify] failed: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[Telegram notify] exception: {e}")
 
 
 def is_port_open(port: int) -> bool:
