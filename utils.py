@@ -1,7 +1,7 @@
 import datetime
+import socket
 import subprocess
 import time
-import socket
 from typing import Optional
 
 from config import OLLAMA_MODEL
@@ -14,7 +14,9 @@ def log(msg: str) -> None:
 def send_notification(title: str, message: str) -> None:
     """Show macOS notification via AppleScript."""
     try:
-        script = f'display notification "{message}" with title "{title}" sound name "Glass"'
+        script = (
+            f'display notification "{message}" with title "{title}" sound name "Glass"'
+        )
         subprocess.run(["osascript", "-e", script])
     except Exception:
         # best-effort, don't crash if notifications fail
@@ -26,7 +28,9 @@ def is_port_open(port: int) -> bool:
         return s.connect_ex(("localhost", port)) == 0
 
 
-def manage_ollama(action: str, was_running_initially: bool = False, port: int = 11434) -> Optional[bool]:
+def manage_ollama(
+    action: str, was_running_initially: bool = False, port: int = 11434
+) -> Optional[bool]:
     """Start or stop Ollama server.
 
     - If `action == 'start'`: starts Ollama if not already running and waits for port.
@@ -39,7 +43,9 @@ def manage_ollama(action: str, was_running_initially: bool = False, port: int = 
         else:
             log(f"Запуск Ollama ({OLLAMA_MODEL})...")
             subprocess.Popen(
-                ["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             attempts = 0
             while not is_port_open(port) and attempts < 15:
@@ -54,6 +60,9 @@ def manage_ollama(action: str, was_running_initially: bool = False, port: int = 
                 pass
         return None
 
+    # If action is not recognized, return None to match Optional[bool]
+    return None
+
 
 def ensure_ollama(port: int = 11434, start_wait_attempts: int = 15) -> bool:
     """Ensure Ollama listening on `port`. Start it if needed and wait until available."""
@@ -61,7 +70,9 @@ def ensure_ollama(port: int = 11434, start_wait_attempts: int = 15) -> bool:
         return True
 
     log(f"Запуск Ollama ({OLLAMA_MODEL})...")
-    subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.Popen(
+        ["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
     for _ in range(start_wait_attempts):
         if is_port_open(port):

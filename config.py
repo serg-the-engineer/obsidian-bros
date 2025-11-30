@@ -18,7 +18,9 @@ LONG_TERM_STORAGE = os.path.join(HOME, "Sergs/Надиктовано")
 OBSIDIAN_AUDIO_LINK_NAME = "AudioLinks"
 
 # Локальный файл истории обработанных файлов (в корне проекта)
-HISTORY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".processed_history")
+HISTORY_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), ".processed_history"
+)
 
 # AI / Модели
 WHISPER_SIZE = "turbo"  # можно переопределить в коде при необходимости

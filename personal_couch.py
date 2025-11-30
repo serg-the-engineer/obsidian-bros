@@ -1,11 +1,11 @@
-import os
 import datetime
+import os
 import subprocess
-import time
-import socket
+
 from openai import OpenAI
-from config import OBSIDIAN_VAULT_ROOT, JOURNAL_DIR, ANALYSIS_DIR, OLLAMA_MODEL, OLLAMA_API_URL
-from utils import log, is_port_open, ensure_ollama
+
+from config import ANALYSIS_DIR, JOURNAL_DIR, OLLAMA_API_URL, OLLAMA_MODEL
+from utils import ensure_ollama, log
 
 # --- ТИПЫ АНАЛИЗА ---
 ANALYSIS_TYPES = {

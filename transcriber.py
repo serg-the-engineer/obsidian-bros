@@ -1,27 +1,26 @@
-import os
-import time
-import shutil
 import datetime
-import subprocess
 import glob
 import json
-import socket
+import os
+import shutil
+import subprocess
+
 from faster_whisper import WhisperModel
 from openai import OpenAI
+
 from config import (
-    VOICE_MEMOS_DIR,
-    LONG_TERM_STORAGE,
-    OBSIDIAN_VAULT_ROOT,
+    HISTORY_FILE,
     JOURNAL_DIR,
+    LONG_TERM_STORAGE,
     NOTES_DIR,
     OBSIDIAN_AUDIO_LINK_NAME,
-    HISTORY_FILE,
-    WHISPER_SIZE,
-    OLLAMA_MODEL,
+    OBSIDIAN_VAULT_ROOT,
     OLLAMA_API_URL,
+    OLLAMA_MODEL,
+    VOICE_MEMOS_DIR,
+    WHISPER_SIZE,
 )
-
-from utils import log, send_notification, is_port_open, manage_ollama
+from utils import log, manage_ollama, send_notification
 
 
 def transcribe(file_path):
