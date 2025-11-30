@@ -1,3 +1,8 @@
+[project]
+name = "obsidian-bros"
+version = "0.1.0"
+requires-python = ">=3.10"
+
 [tool.black]
 line-length = 88
 target-version = ["py312"]

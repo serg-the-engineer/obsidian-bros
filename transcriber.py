@@ -261,6 +261,7 @@ def main():
     new_files = [f for f in all_files if os.path.basename(f) not in processed_files]
 
     if not new_files:
+        log("Новых файлов для транскрибации не найдено.")
         return
 
     log(f"Новых файлов: {len(new_files)}")
