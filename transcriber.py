@@ -162,6 +162,140 @@ def save_to_history(filename):
         f.write(filename + "\n")
 
 
+def git_sync(success_count):
+    """Run git add/commit/push in the obsidian vault when entries were created."""
+    if success_count <= 0:
+        return
+
+    try:
+        subprocess.run(
+            ["git", "add", "."],
+            cwd=OBSIDIAN_VAULT_ROOT,
+            stdout=subprocess.DEVNULL,
+            check=False,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", f"Journal AI: {success_count} entries"],
+            cwd=OBSIDIAN_VAULT_ROOT,
+            stdout=subprocess.DEVNULL,
+            check=False,
+        )
+        subprocess.run(
+            ["git", "push", "origin", "master"],
+            cwd=OBSIDIAN_VAULT_ROOT,
+            stdout=subprocess.DEVNULL,
+            check=False,
+        )
+    except Exception as e:
+        log(f"Git sync failed: {e}")
+
+
+def process_file(file_path):
+    """Process a single audio file: transcribe, analyze, move audio, write md, save history.
+
+    Returns True on success, False on failure or if file is too small.
+    """
+    original_filename = os.path.basename(file_path)
+    if os.path.getsize(file_path) < 1000:
+        return False
+
+    try:
+        # 1. Подготовка
+        creation_dt = datetime.datetime.fromtimestamp(os.path.getmtime(file_path))
+        time_part = creation_dt.strftime("%H%M")
+        temp_path = f"/tmp/{original_filename}"
+        shutil.copy2(file_path, temp_path)
+
+        # 2. Обработка (Whisper + AI)
+        raw_text = transcribe(temp_path)
+        analysis = analyze_and_format(raw_text, creation_dt)
+
+        note_type = analysis.get("type", "Дневник").capitalize()
+        logical_date = analysis.get("logical_date", creation_dt.strftime("%Y-%m-%d"))
+
+        sleep_txt = analysis.get("sleep", "")
+        health_txt = analysis.get("health", "")
+        success_txt = analysis.get("successes", "")
+        score_txt = analysis.get("score", "")
+
+        final_text_content = analysis.get("formatted_transcript", raw_text)
+
+        # 3. Аудио (перемещение)
+        final_audio_name = f"{note_type}_{logical_date}_{time_part}.m4a"
+        final_audio_path = os.path.join(LONG_TERM_STORAGE, final_audio_name)
+
+        counter = 1
+        while os.path.exists(final_audio_path):
+            final_audio_name = f"{note_type}_{logical_date}_{time_part}_{counter}.m4a"
+            final_audio_path = os.path.join(LONG_TERM_STORAGE, final_audio_name)
+            counter += 1
+
+        shutil.move(temp_path, final_audio_path)
+
+        obsidian_audio_link = f"![[{OBSIDIAN_AUDIO_LINK_NAME}/{final_audio_name}]]"
+
+        # 4. Сборка Markdown
+        if note_type == "Заметка":
+            target_dir = NOTES_DIR
+            md_name = f"{logical_date}_{time_part}.md"
+
+            md_content = f"""---
+date: {logical_date}
+time: {time_part}
+type: заметка
+---
+# Заметка {time_part}
+
+{final_text_content}
+
+---
+## Исходный текст
+{obsidian_audio_link}
+"""
+        else:
+            target_dir = JOURNAL_DIR
+            md_name = f"{logical_date}.md"
+
+            structure_block = ""
+            if sleep_txt:
+                structure_block += f"**Сон**: {sleep_txt}\n\n"
+            if health_txt:
+                structure_block += f"**Боли**: {health_txt}\n\n"
+            if success_txt:
+                structure_block += f"**Успехи**: {success_txt}\n\n"
+            if score_txt:
+                structure_block += f"**Оценка дня**: {score_txt}\n\n"
+
+            md_content = f"""---
+date: {logical_date}
+type: дневник
+---
+[[Дневник]]
+
+{structure_block}
+
+---
+---
+## Полный транскрипт
+
+{obsidian_audio_link}
+
+{final_text_content}
+"""
+
+        md_path = os.path.join(target_dir, md_name)
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(md_content)
+
+        save_to_history(original_filename)
+        log(f"[{note_type}] Готово: {md_name}")
+        return True
+
+    except Exception as e:
+        log(f"FAIL {original_filename}: {e}")
+        return False
+
+
 def main():
     if not os.path.exists(VOICE_MEMOS_DIR):
         log("Папка Диктофона не найдена.")
@@ -183,138 +317,11 @@ def main():
             os.makedirs(folder, exist_ok=True)
 
         for file_path in new_files:
-            original_filename = os.path.basename(file_path)
-            if os.path.getsize(file_path) < 1000:
-                continue
-
-            try:
-                # 1. Подготовка
-                creation_dt = datetime.datetime.fromtimestamp(
-                    os.path.getmtime(file_path)
-                )
-                time_part = creation_dt.strftime("%H%M")
-                temp_path = f"/tmp/{original_filename}"
-                shutil.copy2(file_path, temp_path)
-
-                # 2. Обработка (Whisper + AI)
-                raw_text = transcribe(temp_path)
-                analysis = analyze_and_format(raw_text, creation_dt)
-
-                note_type = analysis.get("type", "Дневник").capitalize()
-                logical_date = analysis.get(
-                    "logical_date", creation_dt.strftime("%Y-%m-%d")
-                )
-
-                # Данные для дневника
-                sleep_txt = analysis.get("sleep", "")
-                health_txt = analysis.get("health", "")
-                success_txt = analysis.get("successes", "")
-                score_txt = analysis.get("score", "")
-
-                # Здесь мы берем уже отформатированный текст с абзацами
-                final_text_content = analysis.get("formatted_transcript", raw_text)
-
-                # 3. Аудио (перемещение)
-                final_audio_name = f"{note_type}_{logical_date}_{time_part}.m4a"
-                final_audio_path = os.path.join(LONG_TERM_STORAGE, final_audio_name)
-
-                counter = 1
-                while os.path.exists(final_audio_path):
-                    final_audio_name = (
-                        f"{note_type}_{logical_date}_{time_part}_{counter}.m4a"
-                    )
-                    final_audio_path = os.path.join(LONG_TERM_STORAGE, final_audio_name)
-                    counter += 1
-
-                shutil.move(temp_path, final_audio_path)
-
-                # Ссылка для Obsidian
-                obsidian_audio_link = (
-                    f"![[{OBSIDIAN_AUDIO_LINK_NAME}/{final_audio_name}]]"
-                )
-
-                # 4. Сборка Markdown
-                if note_type == "Заметка":
-                    target_dir = NOTES_DIR
-                    md_name = f"{logical_date}_{time_part}.md"
-
-                    md_content = f"""---
-date: {logical_date}
-time: {time_part}
-type: заметка
----
-# Заметка {time_part}
-
-{final_text_content}
-
----
-## Исходный текст
-{obsidian_audio_link}
-"""
-                else:
-                    # ДНЕВНИК
-                    target_dir = JOURNAL_DIR
-                    # Имя файла как вы хотели: дата_время
-                    md_name = f"{logical_date}.md"
-
-                    structure_block = ""
-                    if sleep_txt:
-                        structure_block += f"**Сон**: {sleep_txt}\n\n"
-                    if health_txt:
-                        structure_block += f"**Боли**: {health_txt}\n\n"
-                    if success_txt:
-                        structure_block += f"**Успехи**: {success_txt}\n\n"
-                    if score_txt:
-                        structure_block += f"**Оценка дня**: {score_txt}\n\n"
-
-                    md_content = f"""---
-date: {logical_date}
-type: дневник
----
-[[Дневник]]
-
-{structure_block}
-
----
----
-## Полный транскрипт
-
-{obsidian_audio_link}
-
-{final_text_content}
-"""
-
-                md_path = os.path.join(target_dir, md_name)
-                with open(md_path, "w", encoding="utf-8") as f:
-                    f.write(md_content)
-
-                save_to_history(original_filename)
+            if process_file(file_path):
                 success_count += 1
-                log(f"[{note_type}] Готово: {md_name}")
-
-            except Exception as e:
-                log(f"FAIL {original_filename}: {e}")
 
         # Git Sync
-        if success_count > 0:
-            subprocess.run(
-                ["git", "add", "."],
-                cwd=OBSIDIAN_VAULT_ROOT,
-                stdout=subprocess.DEVNULL,
-                check=False,
-            )
-            subprocess.run(
-                ["git", "commit", "-m", f"Journal AI: {success_count} entries"],
-                cwd=OBSIDIAN_VAULT_ROOT,
-                stdout=subprocess.DEVNULL,
-                check=False,
-            )
-            subprocess.run(
-                ["git", "push", "origin", "master"],
-                cwd=OBSIDIAN_VAULT_ROOT,
-                stdout=subprocess.DEVNULL,
-                check=False,
-            )
+        git_sync(success_count)
 
     finally:
         manage_ollama("stop", was_running_initially=we_started_ollama)
