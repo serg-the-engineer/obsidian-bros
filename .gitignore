@@ -98,3 +98,5 @@ __MACOSX/
 # dotenv
 .env
 .env.*
+
+.processed_history
