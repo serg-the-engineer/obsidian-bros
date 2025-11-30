@@ -8,64 +8,20 @@ import json
 import socket
 from faster_whisper import WhisperModel
 from openai import OpenAI
-
-# --- ПУТИ ---
-HOME = os.path.expanduser("~")
-VOICE_MEMOS_DIR = os.path.join(
-    HOME, "Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings"
-)
-LONG_TERM_STORAGE = os.path.join(HOME, "Sergs/Надиктовано")
-
-# Obsidian
-OBSIDIAN_VAULT_ROOT = os.path.join(HOME, "Obsidian/HappySergsVault")
-JOURNAL_DIR = os.path.join(OBSIDIAN_VAULT_ROOT, "Дневник")
-NOTES_DIR = os.path.join(OBSIDIAN_VAULT_ROOT, "Аудиозаметки")
-
-# Имя папки-ссылки внутри Obsidian
-OBSIDIAN_AUDIO_LINK_NAME = "AudioLinks"
-
-HISTORY_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), ".processed_history"
+from config import (
+    VOICE_MEMOS_DIR,
+    LONG_TERM_STORAGE,
+    OBSIDIAN_VAULT_ROOT,
+    JOURNAL_DIR,
+    NOTES_DIR,
+    OBSIDIAN_AUDIO_LINK_NAME,
+    HISTORY_FILE,
+    WHISPER_SIZE,
+    OLLAMA_MODEL,
+    OLLAMA_API_URL,
 )
 
-# --- НАСТРОЙКИ AI ---
-WHISPER_SIZE = "turbo" # "large-v3"
-OLLAMA_MODEL = "qwen3:8b"
-
-
-def log(msg):
-    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}")
-
-
-def send_notification(title, message):
-    script = f'display notification "{message}" with title "{title}" sound name "Glass"'
-    subprocess.run(["osascript", "-e", script])
-
-
-def is_port_open(port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        return s.connect_ex(("localhost", port)) == 0
-
-
-def manage_ollama(action, was_running_initially=False):
-    if action == "start":
-        if is_port_open(11434):
-            return False
-        else:
-            log(f"Запуск Ollama ({OLLAMA_MODEL})...")
-            subprocess.Popen(
-                ["ollama", "serve"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            attempts = 0
-            while not is_port_open(11434) and attempts < 15:
-                time.sleep(2)
-                attempts += 1
-            return True
-    elif action == "stop":
-        if was_running_initially:
-            subprocess.run(["pkill", "ollama"], check=False)
+from utils import log, send_notification, is_port_open, manage_ollama
 
 
 def transcribe(file_path):
@@ -83,7 +39,7 @@ def transcribe(file_path):
 
 def analyze_and_format(text, file_creation_dt):
     log("AI анализирует (структура + форматирование)...")
-    client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+    client = OpenAI(base_url=OLLAMA_API_URL, api_key="ollama")
 
     date_today = file_creation_dt.strftime("%Y-%m-%d")
     date_yesterday = (file_creation_dt - datetime.timedelta(days=1)).strftime(
